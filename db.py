@@ -2,17 +2,17 @@
 # db.py - Capa de acceso a datos (Data Access Layer)
 # ============================================================
 import psycopg2
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 # ------------------------------------------------------------
-# Configuración de la conexión (cambia la contraseña por la tuya)
+# Configuración de la conexión (¡CAMBIALA POR TU CONTRASEÑA!)
 # ------------------------------------------------------------
 DB_CONFIG = {
     "host": "localhost",
     "port": 5432,
     "database": "inventario_db",
     "user": "postgres",
-    "password": "1234"   # <--- CAMBIA AQUÍ
+    "password": "1234"   # <--- CAMBIA AQUÍ por tu contraseña real
 }
 
 def get_connection():
@@ -20,7 +20,7 @@ def get_connection():
     return psycopg2.connect(**DB_CONFIG)
 
 # ------------------------------------------------------------
-# Operaciones CRUD básicas (para reutilizar luego en Inventario)
+# Operaciones CRUD básicas
 # ------------------------------------------------------------
 def crear_producto(nombre: str, precio: float, stock: int) -> bool:
     """
@@ -30,7 +30,6 @@ def crear_producto(nombre: str, precio: float, stock: int) -> bool:
     try:
         conn = get_connection()
         cur = conn.cursor()
-        # El CHECK precio >= 1 y stock >= 0 se aplican automáticamente en la BD.
         cur.execute(
             "INSERT INTO productos (nombre, precio, stock) VALUES (%s, %s, %s);",
             (nombre, precio, stock)
@@ -39,9 +38,8 @@ def crear_producto(nombre: str, precio: float, stock: int) -> bool:
         cur.close()
         conn.close()
         return True
-    except psycopg2.IntegrityError as e:
-        # Si el nombre ya existe, la BD lanza este error.
-        print(f"⚠️  Error de integridad: {e}")
+    except psycopg2.IntegrityError:
+        print(f"⚠️  El producto '{nombre}' ya existe en la base de datos.")
         return False
     except Exception as e:
         print(f"❌ Error inesperado al crear producto: {e}")
@@ -54,7 +52,6 @@ def buscar_por_texto(texto: str) -> List[Tuple[int, str, float, int]]:
     """
     conn = get_connection()
     cur = conn.cursor()
-    # ILIKE es la versión de LIKE que no distingue mayúsculas.
     cur.execute(
         "SELECT id, nombre, precio, stock FROM productos WHERE nombre ILIKE %s;",
         (f"%{texto}%",)
@@ -71,7 +68,6 @@ def eliminar_por_nombre(nombre: str) -> bool:
     """
     conn = get_connection()
     cur = conn.cursor()
-    # Usamos ILIKE para insensibilidad, y LIMIT 1 por seguridad (aunque nombre es UNIQUE).
     cur.execute(
         "DELETE FROM productos WHERE nombre ILIKE %s;",
         (nombre,)
@@ -109,6 +105,26 @@ def obtener_todos() -> List[Tuple[int, str, float, int]]:
     conn.close()
     return resultados
 
+# ------------------------------------------------------------
+# NUEVA FUNCIÓN: obtener_stock_bajo (para el endpoint)
+# ------------------------------------------------------------
+def obtener_stock_bajo(limite: int = 5) -> List[Tuple[int, str, float, int]]:
+    """
+    Devuelve todos los productos cuyo stock sea menor al límite indicado.
+    Por defecto, límite = 5.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, nombre, precio, stock FROM productos WHERE stock < %s ORDER BY stock ASC;",
+        (limite,)
+    )
+    resultados = cur.fetchall()
+    cur.close()
+    conn.close()
+    return resultados
+
+# ------------------------------------------------------------
 def vaciar_tabla():
     """Elimina todos los productos de la tabla (para pruebas)."""
     conn = get_connection()
